@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Pathfinding Visualizer</title>
+    <!-- Link to our CSS file -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Link to Tailwind CSS for easy styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font for a clean look */
+        body {
+            font-family: "Inter", sans-serif;
+        }
+        /* Custom styles for grid cells - will be detailed in style.css */
+        .grid-cell {
+            /* Changed from 'width' and 'height' to 'min-width' and 'min-height' */
+            min-width: 25px; /* Default minimum size, will adjust with JS */
+            min-height: 25px;
+            border: 1px solid #e2e8f0; /* Tailwind's gray-200 */
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+            background-color: white;
+            transition: background-color 0.1s ease-in-out;
+        }
+        .grid-cell.start {
+            background-color: #34D399; /* Tailwind's green-400 */
+        }
+        .grid-cell.end {
+            background-color: #EF4444; /* Tailwind's red-500 */
+        }
+        .grid-cell.wall {
+            background-color: #4B5563; /* Tailwind's gray-700 */
+        }
+        .grid-cell.weight {
+            background-color: #FBBF24; /* Tailwind's amber-400 */
+        }
+        .grid-cell.visited {
+            background-color: #BFDBFE; /* Tailwind's blue-200 */
+            animation: visitedAnimation 0.3s ease-out forwards;
+        }
+        .grid-cell.path {
+            background-color: #60A5FA; /* Tailwind's blue-400 */
+            animation: pathAnimation 0.5s ease-out forwards;
+        }
+
+        /* Keyframe animations for visual feedback */
+        @keyframes visitedAnimation {
+            from {
+                transform: scale(0.3);
+                background-color: #93C5FD; /* Tailwind's blue-300 */
+                border-radius: 100%;
+            }
+            to {
+                transform: scale(1);
+                background-color: #BFDBFE; /* Tailwind's blue-200 */
+                border-radius: 0%;
+            }
+        }
+
+        @keyframes pathAnimation {
+            from {
+                transform: scale(0.6);
+                background-color: #2563EB; /* Tailwind's blue-700 */
+                border-radius: 100%;
+            }
+            to {
+                transform: scale(1);
+                background-color: #60A5FA; /* Tailwind's blue-400 */
+                border-radius: 0%;
+            }
+        }
+
+        /* Styles for the grid container itself */
+        #gridContainer {
+            display: grid;
+            border: 1px solid #cbd5e1; /* Tailwind's slate-300 */
+            border-radius: 0.5rem;
+            overflow: auto; /* Enable scrolling if grid is too large */
+            margin: 0 auto; /* Center the grid */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4 sm:p-6">
+    <div class="container bg-white shadow-xl rounded-xl p-6 sm:p-8 w-full max-w-5xl">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-center mb-6 text-gray-900">Pathfinding Visualizer</h1>
+
+        <!-- Main Controls Section -->
+        <div class="controls flex flex-col md:flex-row md:justify-between items-center gap-4 mb-8">
+            <!-- Algorithm Selection & Action Buttons -->
+            <div class="flex flex-wrap justify-center gap-3">
+                <select id="algorithmSelect" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
+                    <option value="bfs">Breadth-First Search (BFS)</option>
+                    <option value="dfs">Depth-First Search (DFS)</option>
+                    <option value="dijkstra">Dijkstra's Algorithm</option>
+                    <option value="astar">A* Search</option>
+                </select>
+                <button id="visualizeBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50">Visualize Path</button>
+            </div>
+
+            <!-- Clear & Generate Buttons -->
+            <div class="flex flex-wrap justify-center gap-3 mt-4 md:mt-0">
+                <button id="clearBoardBtn" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">Clear Board</button>
+                <button id="clearPathBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50">Clear Path</button>
+                <button id="generateMazeBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50">Generate Maze</button>
+            </div>
+        </div>
+
+        <!-- Node Type Selection, Speed Control & Grid Size -->
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-6 mb-8 p-4 bg-gray-50 rounded-lg shadow-inner">
+            <!-- Node Type Selector -->
+            <div class="node-type-selector flex flex-col items-center">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Select Node Type:</label>
+                <div class="flex flex-wrap gap-2">
+                    <label class="inline-flex items-center cursor-pointer bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg transition duration-200">
+                        <input type="radio" name="nodeType" value="wall" class="form-radio h-4 w-4 text-gray-600" checked>
+                        <span class="ml-2 text-gray-800 font-medium">Wall</span>
+                    </label>
+                    <label class="inline-flex items-center cursor-pointer bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg transition duration-200">
+                        <input type="radio" name="nodeType" value="start" class="form-radio h-4 w-4 text-green-600">
+                        <span class="ml-2 text-gray-800 font-medium">Start</span>
+                    </label>
+                    <label class="inline-flex items-center cursor-pointer bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg transition duration-200">
+                        <input type="radio" name="nodeType" value="end" class="form-radio h-4 w-4 text-red-600">
+                        <span class="ml-2 text-gray-800 font-medium">End</span>
+                    </label>
+                    <label class="inline-flex items-center cursor-pointer bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg transition duration-200">
+                        <input type="radio" name="nodeType" value="weight" class="form-radio h-4 w-4 text-yellow-600">
+                        <span class="ml-2 text-gray-800 font-medium">Weight</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Speed Control -->
+            <div class="speed-control flex flex-col items-center mt-4 sm:mt-0">
+                <label for="animationSpeed" class="block text-gray-700 text-sm font-bold mb-2">Animation Speed:</label>
+                <input type="range" id="animationSpeed" min="10" max="500" value="50" class="w-48 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                <span id="speedValue" class="text-gray-600 text-sm mt-1">50ms</span>
+            </div>
+
+            <!-- Grid Size Inputs -->
+            <div class="grid-size-inputs flex flex-col items-center mt-4 sm:mt-0">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Grid Size (Rows x Cols):</label>
+                <div class="flex gap-2">
+                    <input type="number" id="numRows" value="20" min="5" max="50" class="w-20 p-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <span class="text-gray-600 text-lg font-bold">x</span>
+                    <input type="number" id="numCols" value="50" min="5" max="100" class="w-20 p-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="applyGridSizeBtn" class="bg-gray-700 hover:bg-gray-800 text-white font-semibold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50">Apply</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Algorithm Options and Features (e.g., Diagonal Movement, Save/Load) -->
+        <div class="flex flex-col sm:flex-row justify-center items-center gap-6 mb-8 p-4 bg-gray-50 rounded-lg shadow-inner">
+            <label class="inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="allowDiagonal" class="form-checkbox h-5 w-5 text-blue-600 rounded">
+                <span class="ml-2 text-gray-800 font-medium">Allow Diagonal Movement</span>
+            </label>
+            
+            <!-- New: Save/Load Buttons -->
+            <button id="saveGridBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">Save Grid</button>
+            <button id="loadGridBtn" class="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-50">Load Grid</button>
+        </div>
+
+        <!-- Grid Container -->
+        <div id="gridContainer" class="grid-container overflow-auto border border-gray-300 rounded-lg w-full">
+            <!-- The grid will be dynamically generated here by JavaScript -->
+        </div>
+
+        <!-- New: Statistics Display -->
+        <div id="statistics" class="mt-8 p-6 bg-gray-50 rounded-lg shadow-inner text-gray-700 hidden">
+            <h2 class="text-xl font-bold mb-3 text-gray-800">Algorithm Statistics:</h2>
+            <ul class="list-disc list-inside space-y-2">
+                <li>Path Length: <span id="pathLength" class="font-semibold text-gray-900">0</span></li>
+                <li>Path Cost: <span id="pathCost" class="font-semibold text-gray-900">0</span></li>
+                <li>Nodes Visited: <span id="nodesVisited" class="font-semibold text-gray-900">0</span></li>
+                <li>Time Taken: <span id="timeTaken" class="font-semibold text-gray-900">0 ms</span></li>
+            </ul>
+        </div>
+
+        <!-- Instructions Section -->
+        <div class="instructions mt-8 p-6 bg-blue-50 rounded-lg shadow-inner text-gray-700">
+            <h2 class="text-xl font-bold mb-3 text-blue-800">How to Use:</h2>
+            <ul class="list-disc list-inside space-y-2">
+                <li><strong class="text-gray-900">Select Node Type:</strong> Choose whether you want to draw walls, set the start node, end node, or weighted nodes.</li>
+                <li><strong class="text-gray-900">Draw on Grid:</strong> Click and drag your mouse over the grid to place the selected node type.</li>
+                <li><strong class="text-gray-900">Move Start/End:</strong> If a start/end node already exists, selecting its type and clicking on a new cell will move it.</li>
+                <li><strong class="text-gray-900">Algorithm:</strong> Select a pathfinding algorithm from the dropdown.</li>
+                <li><strong class="text-gray-900">Visualize:</strong> Click "Visualize Path" to see the algorithm in action.</li>
+                <li><strong class="text-gray-900">Clear Board:</strong> Removes all walls, weights, paths, and visited nodes.</li>
+                <li><strong class="text-gray-900">Clear Path:</strong> Only removes the visualized path and visited nodes, keeping walls/weights.</li>
+                <li><strong class="text-gray-900">Animation Speed:</strong> Adjust the slider to control the visualization speed.</li>
+                <li><strong class="text-gray-900">Grid Size:</strong> Change the number of rows and columns and click "Apply" to regenerate the grid.</li>
+                <li><strong class="text-gray-900">Allow Diagonal Movement:</strong> Check this box to enable diagonal movement for pathfinding algorithms.</li>
+                <li><strong class="text-gray-900">Save/Load Grid:</strong> Use these buttons to save your current grid setup or load a previously saved one.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Link to our JavaScript file -->
+    <script src="script.js"></script>
+</body>
+</html>
